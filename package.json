@@ -9,10 +9,13 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
+    "db:ca": "node scripts/security/fetch-supabase-ca.mjs",
+    "db:ca:check": "node scripts/security/fetch-supabase-ca.mjs --check",
     "db:migrate": "node scripts/db/migrate.mjs",
     "db:status": "node scripts/db/migrate.mjs --status",
     "db:verify": "node scripts/db/verify.mjs",
     "admin:promote": "node scripts/admin/promote-admin.mjs",
+    "test:tls": "node tests/security/tls.mjs",
     "test:smoke": "node tests/security/smoke.mjs",
     "test:security": "node tests/security/run.mjs",
     "check:bundle": "node scripts/security/check-bundle.mjs"

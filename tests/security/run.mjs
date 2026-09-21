@@ -521,8 +521,20 @@ async function main() {
 
   // Doctor A is now public; doctor B is not.
   const directory = await anon.from('verified_doctors').select('*');
+  if (directory.error) {
+    // Surface the reason rather than reporting a bare assertion failure — an
+    // errored query and an empty result mean very different things.
+    fail(
+      'anonymous read of the public directory',
+      `${directory.error.code ?? ''} ${directory.error.message}`,
+    );
+  }
   const listedIds = (directory.data ?? []).map((d) => d.doctor_id);
-  check(listedIds.includes(doctorA.id), 'verified doctor appears in the public directory');
+  check(
+    listedIds.includes(doctorA.id),
+    'verified doctor appears in the public directory',
+    `${listedIds.length} listed; looking for ${doctorA.id.slice(0, 8)}`,
+  );
   check(
     !listedIds.includes(doctorB.id),
     'unverified doctor is absent from the public directory',
@@ -534,7 +546,7 @@ async function main() {
       !viewColumns.includes('phone') &&
       !viewColumns.includes('date_of_birth'),
     'directory view exposes no sensitive columns',
-    viewColumns.join(','),
+    viewColumns.length ? viewColumns.join(',') : 'no rows returned, cannot inspect columns',
   );
 
   // ===========================================================================

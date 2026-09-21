@@ -1,0 +1,10 @@
+{
+  "comment": "Pinned Supabase Postgres root CA. Verified on every connection. Compare sha256 against Dashboard > Settings > Database > SSL Configuration.",
+  "subject": "Supabase Root 2021 CA",
+  "serialNumber": "6CBC4CA1DEB63F692D0A2024C67289C2D13D54F6",
+  "validFrom": "Apr 28 10:56:53 2021 GMT",
+  "validTo": "Apr 26 10:56:53 2031 GMT",
+  "sha256": "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa",
+  "capturedFrom": "aws-0-ap-south-1.pooler.supabase.com",
+  "capturedAt": "2026-09-21T18:48:14.181Z"
+}
