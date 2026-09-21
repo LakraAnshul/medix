@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# Environment / secrets — never commit these.
+.env
+.env.*
+.env*
+!.env.example
+
+# Local scratch files
+.tmp_*

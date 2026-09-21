@@ -1,0 +1,6 @@
+{
+  "name": "Medix Healthcare",
+  "description": "Modern medical clinic and healthcare website clone with smooth scroll animations, doctor directory, check-up packages, and appointment booking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
