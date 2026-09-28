@@ -17,8 +17,15 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import DashboardPage from './pages/DashboardPage';
 import PatientPage from './pages/PatientPage';
+import PatientProfilePage from './pages/PatientProfilePage';
 import DoctorPage from './pages/DoctorPage';
+import DoctorProfilePage from './pages/DoctorProfilePage';
+import DoctorCredentialsPage from './pages/DoctorCredentialsPage';
+import DoctorAvailabilityPage from './pages/DoctorAvailabilityPage';
 import AdminPage from './pages/AdminPage';
+import AdminDoctorReviewPage from './pages/AdminDoctorReviewPage';
+import DoctorDiscoveryPage from './pages/DoctorDiscoveryPage';
+import DoctorDetailsPage from './pages/DoctorDetailsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -56,12 +63,24 @@ export default function App() {
             }
           />
 
+          {/* Public doctor discovery — reads only the narrow verified_doctors view */}
+          <Route path="/doctors" element={<DoctorDiscoveryPage />} />
+          <Route path="/doctors/:doctorId" element={<DoctorDetailsPage />} />
+
           {/* Role-scoped */}
           <Route
             path="/patient"
             element={
               <ProtectedRoute allowedRoles={['patient']}>
                 <PatientPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patient/profile"
+            element={
+              <ProtectedRoute allowedRoles={['patient']}>
+                <PatientProfilePage />
               </ProtectedRoute>
             }
           />
@@ -74,10 +93,42 @@ export default function App() {
             }
           />
           <Route
+            path="/doctor/profile"
+            element={
+              <ProtectedRoute allowedRoles={['doctor']}>
+                <DoctorProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/credentials"
+            element={
+              <ProtectedRoute allowedRoles={['doctor']}>
+                <DoctorCredentialsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doctor/availability"
+            element={
+              <ProtectedRoute allowedRoles={['doctor']}>
+                <DoctorAvailabilityPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin"
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/doctors/:doctorId"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <AdminDoctorReviewPage />
               </ProtectedRoute>
             }
           />

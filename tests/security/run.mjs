@@ -1438,6 +1438,236 @@ async function main() {
     'anonymous visitors can see open slots of verified doctors',
   );
 
+  // =========================================================================
+  section('17. Phase 3 — doctor/patient module authorization');
+  // =========================================================================
+
+  // --- Availability: cross-tenant writes ------------------------------------
+  const targetWindow = await doctorA.client
+    .from('doctor_availability')
+    .insert({doctor_id: doctorA.id, start_time: futureIso(900), end_time: futureIso(960)})
+    .select()
+    .maybeSingle();
+  expectWriteAllowed(targetWindow, 'doctor A publishes a window for the cross-tenant tests');
+  const targetWindowId = targetWindow.data?.id;
+
+  if (targetWindowId) {
+    expectWriteDenied(
+      await doctorB.client
+        .from('doctor_availability')
+        .update({status: 'blocked'})
+        .eq('id', targetWindowId)
+        .select(),
+      'doctor B cannot block doctor A availability',
+    );
+    expectWriteDenied(
+      await patientA.client
+        .from('doctor_availability')
+        .update({status: 'blocked'})
+        .eq('id', targetWindowId)
+        .select(),
+      'patient cannot modify doctor availability at all',
+    );
+  }
+  expectWriteDenied(
+    await patientA.client
+      .from('doctor_availability')
+      .insert({doctor_id: doctorA.id, start_time: futureIso(1200), end_time: futureIso(1260)})
+      .select(),
+    'patient cannot create availability for a doctor',
+    ['42501'],
+  );
+  // No DELETE policy exists for any role — confirm block-via-status is the only path.
+  expectWriteDenied(
+    await doctorA.client.from('doctor_availability').delete().eq('id', targetWindowId ?? '').select(),
+    'doctor cannot delete an availability row (no DELETE policy; block via status instead)',
+  );
+
+  // --- Doctor profile: cross-tenant writes, mass-assignment over raw HTTP ---
+  expectWriteDenied(
+    await doctorB.client
+      .from('doctor_profiles')
+      .update({bio: 'hijacked by doctor B'})
+      .eq('user_id', doctorA.id)
+      .select(),
+    'doctor B cannot edit doctor A professional profile',
+  );
+  expectWriteDenied(
+    await patientA.client
+      .from('doctor_profiles')
+      .update({bio: 'hijacked by a patient'})
+      .eq('user_id', doctorA.id)
+      .select(),
+    'patient cannot edit a doctor professional profile',
+  );
+
+  // A hand-crafted request from a doctor session trying to self-verify by
+  // smuggling verification_status through the same PATCH as a legitimate bio
+  // edit — the UI never offers this field, but the API must refuse it anyway.
+  const smuggledVerify = await rawRequest({
+    path: `doctor_profiles?user_id=eq.${doctorB.id}`,
+    method: 'PATCH',
+    accessToken: doctorB.accessToken,
+    body: {bio: 'legitimate-looking edit', verification_status: 'verified'},
+  });
+  check(
+    smuggledVerify.status >= 400,
+    'doctor cannot smuggle verification_status through a profile PATCH',
+    `HTTP ${smuggledVerify.status}`,
+  );
+
+  // --- Credentials: cross-tenant writes ------------------------------------
+  const crossCredUpload = await doctorA.client.storage
+    .from('doctor-credentials')
+    .upload(`${doctorB.id}/${crypto.randomUUID()}.pdf`, pdf, {contentType: 'application/pdf'});
+  check(
+    Boolean(crossCredUpload.error),
+    'doctor A cannot upload a credential into doctor B storage folder (repeat, Phase 3 path)',
+    crossCredUpload.error ? 'denied' : 'UPLOAD SUCCEEDED',
+  );
+  if (!crossCredUpload.error) trackObject('doctor-credentials', `${doctorB.id}/x`);
+
+  const bCredForAttempt = await doctorB.client
+    .from('doctor_credentials')
+    .insert({
+      doctor_id: doctorB.id,
+      credential_type: 'degree',
+      document_path: `${doctorB.id}/${crypto.randomUUID()}.pdf`,
+      document_name: 'legit.pdf',
+    })
+    .select()
+    .maybeSingle();
+  if (bCredForAttempt.data) {
+    expectWriteDenied(
+      await doctorA.client
+        .from('doctor_credentials')
+        .update({verification_status: 'verified'})
+        .eq('id', bCredForAttempt.data.id)
+        .select(),
+      'doctor A cannot approve doctor B credential (only an admin may)',
+      ['42501'],
+    );
+    expectNoRows(
+      await doctorA.client.from('doctor_credentials').select('*').eq('id', bCredForAttempt.data.id),
+      'doctor A cannot even read doctor B credential row',
+    );
+  }
+
+  // --- Admin: rejection without a reason is impossible ----------------------
+  const credForRejection = await doctorB.client
+    .from('doctor_credentials')
+    .insert({
+      doctor_id: doctorB.id,
+      credential_type: 'identity_proof',
+      document_path: `${doctorB.id}/${crypto.randomUUID()}.pdf`,
+      document_name: 'id-proof.pdf',
+    })
+    .select()
+    .maybeSingle();
+
+  if (credForRejection.data) {
+    // Exactly what the UI's RejectModal is designed to make impossible to send —
+    // proven here directly against the API, bypassing the UI entirely.
+    expectWriteDenied(
+      await admin.client
+        .from('doctor_credentials')
+        .update({verification_status: 'rejected', rejection_reason: null})
+        .eq('id', credForRejection.data.id)
+        .select(),
+      'admin cannot reject a credential with a null reason',
+      ['23514'],
+    );
+    expectWriteDenied(
+      await admin.client
+        .from('doctor_credentials')
+        .update({verification_status: 'rejected', rejection_reason: '   '})
+        .eq('id', credForRejection.data.id)
+        .select(),
+      'admin cannot reject a credential with a blank/whitespace-only reason',
+      ['23514'],
+    );
+    expectWriteAllowed(
+      await admin.client
+        .from('doctor_credentials')
+        .update({
+          verification_status: 'rejected',
+          rejection_reason: 'Document is illegible; please re-upload a clearer scan.',
+        })
+        .eq('id', credForRejection.data.id)
+        .select(),
+      'admin can reject a credential when a real reason is supplied',
+    );
+
+    // A rejected slot frees up for re-upload of the same credential_type
+    // (doctor_credentials_one_live_per_type only covers pending/verified).
+    const reupload = await doctorB.client
+      .from('doctor_credentials')
+      .insert({
+        doctor_id: doctorB.id,
+        credential_type: 'identity_proof',
+        document_path: `${doctorB.id}/${crypto.randomUUID()}.pdf`,
+        document_name: 'id-proof-v2.pdf',
+      })
+      .select()
+      .maybeSingle();
+    expectWriteAllowed(reupload, 'doctor can re-upload the same credential type after a rejection');
+  }
+
+  // Reject an admin's attempt to reject a doctor profile itself (not a
+  // credential) without ever offering a reason field — doctor_profiles has no
+  // rejection_reason column, so "rejected" must still be a legitimate status
+  // transition without one; this just confirms the transition itself works and
+  // is admin-only, already covered above in section 7, re-asserted here for
+  // the doctor B fixture used throughout this section.
+  expectWriteDenied(
+    await doctorB.client
+      .from('doctor_profiles')
+      .update({verification_status: 'rejected'})
+      .eq('user_id', doctorB.id)
+      .select(),
+    'doctor cannot reject/suspend/verify their own profile',
+    ['42501'],
+  );
+
+  // --- Discovery: the exact query shape the DoctorDiscoveryPage UI uses -----
+  // doctorA is verified (section 7) with specialization 'Cardiology'; search on
+  // that real value rather than the test-fixture label, which would never
+  // legitimately match anything.
+  const discoverySearch = await anon
+    .from('verified_doctors')
+    .select('*', {count: 'exact'})
+    .or(`full_name.ilike.%Test%,specialization.ilike.%Cardiology%`)
+    .range(0, 11);
+  check(
+    !discoverySearch.error,
+    'anonymous doctor search (the exact discovery-page query) succeeds',
+    discoverySearch.error?.message,
+  );
+  const searchColumns = Object.keys(discoverySearch.data?.[0] ?? {});
+  if (searchColumns.length > 0) {
+    check(
+      !searchColumns.includes('registration_number') && !searchColumns.includes('user_id'),
+      'search results carry no internal id or registration number',
+      searchColumns.join(','),
+    );
+  }
+  check(
+    (discoverySearch.data ?? []).some((row) => row.doctor_id === doctorA.id),
+    'the verified doctor (doctor A) is found by specialization search',
+    `${discoverySearch.data?.length ?? 0} result(s)`,
+  );
+
+  // Pending/rejected/suspended doctors must never appear even via search.
+  // doctorB is deliberately never verified in this suite.
+  const bSearch = await anon
+    .from('verified_doctors')
+    .select('doctor_id')
+    .ilike('specialization', '%Neurology%'); // doctorB's specialization, from section 4
+  check(
+    (bSearch.data ?? []).every((row) => row.doctor_id !== doctorB.id),
+    'an unverified doctor (doctor B) never appears in discovery search results',
+  );
+
   const {failed} = summary();
 
   await cleanup();

@@ -213,4 +213,93 @@ export const validate = {
     if (!/^\+?[0-9]{7,15}$/.test(v)) return 'Enter digits only, optionally starting with +.';
     return null;
   },
+
+  /** Mirrors profiles_full_name_length: char_length(btrim(full_name)) between 2 and 120. */
+  fullNameRequired(value: string): string | null {
+    const v = value.trim();
+    if (!v) return 'Full name is required.';
+    if (v.length < 2) return 'Enter your full name.';
+    if (v.length > 120) return 'That name is too long.';
+    return null;
+  },
+
+  /** Mirrors profiles.date_of_birth_range (>= 1900) and the guard trigger's "not in the future" check. */
+  dateOfBirth(value: string): string | null {
+    if (!value) return null; // optional
+    const date = new Date(`${value}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return 'Enter a valid date.';
+    if (date > new Date()) return 'Date of birth cannot be in the future.';
+    if (date < new Date('1900-01-01')) return 'Enter a valid date of birth.';
+    return null;
+  },
+
+  /** Mirrors patient_profiles_height_range: 20-275 cm. */
+  heightCm(value: string): string | null {
+    if (!value) return null; // optional
+    const n = Number(value);
+    if (Number.isNaN(n)) return 'Enter a number.';
+    if (n < 0) return 'Height cannot be negative.';
+    if (n < 20 || n > 275) return 'Enter a height between 20 and 275 cm.';
+    return null;
+  },
+
+  /** Mirrors patient_profiles_weight_range: 0.3-650 kg. */
+  weightKg(value: string): string | null {
+    if (!value) return null; // optional
+    const n = Number(value);
+    if (Number.isNaN(n)) return 'Enter a number.';
+    if (n < 0) return 'Weight cannot be negative.';
+    if (n < 0.3 || n > 650) return 'Enter a weight between 0.3 and 650 kg.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_specialization_length: 2-120 chars. */
+  specialization(value: string): string | null {
+    const v = value.trim();
+    if (!v) return 'Specialization is required.';
+    if (v.length < 2 || v.length > 120) return 'Enter a specialization between 2 and 120 characters.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_qualification_length: 2-200 chars. */
+  qualification(value: string): string | null {
+    const v = value.trim();
+    if (!v) return 'Qualification is required.';
+    if (v.length < 2 || v.length > 200) return 'Enter a qualification between 2 and 200 characters.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_registration_number_length: 3-64 chars. */
+  registrationNumber(value: string): string | null {
+    const v = value.trim();
+    if (!v) return 'Registration number is required.';
+    if (v.length < 3 || v.length > 64) return 'Enter a valid registration number.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_experience_range: 0-70. */
+  experienceYears(value: string): string | null {
+    if (value === '') return 'Experience is required.';
+    const n = Number(value);
+    if (Number.isNaN(n) || !Number.isInteger(n)) return 'Enter a whole number of years.';
+    if (n < 0) return 'Experience cannot be negative.';
+    if (n > 70) return 'Enter a realistic number of years.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_consultation_fee_range: 0-1,000,000. */
+  consultationFee(value: string): string | null {
+    if (value === '') return 'Consultation fee is required.';
+    const n = Number(value);
+    if (Number.isNaN(n)) return 'Enter a number.';
+    if (n < 0) return 'Fee cannot be negative.';
+    if (n > 1000000) return 'Enter a realistic fee.';
+    return null;
+  },
+
+  /** Mirrors doctor_profiles_bio_length: <= 4000 chars. */
+  bio(value: string): string | null {
+    if (value.length > 4000) return 'Bio is too long (max 4000 characters).';
+    return null;
+  },
 };
